@@ -4,15 +4,21 @@ from datetime import datetime
 import multiprocessing
 import pandas as pd
 from sqlalchemy import create_engine
-from helpers2 import DataPreprocessor, save_scaler
+from helpers import DataPreprocessor, save_scaler
 
-# Constantes e Configurações
+# Load the data
 clinical_info = pd.read_csv("https://api.vitaldb.net/cases")
 df_trks = pd.read_csv("https://api.vitaldb.net/trks")
+
+# Connect to the database
 engine = create_engine("mysql://root:Ana.mysql.18@127.0.0.1/vitaldb_test")
+
+# Vital signs to be extracted
 vital_signs = ['dbp', 'sbp', 'mbp', 'hr', 'spo2', 'bis', 'exp_sevo', 'insp_sevo']
 
-# Seleção de casos
+# Filter the caseids based on the availability of all the vital signs
+# Also filter based on the clinical information (age >18, weight > 35, asa < 4, ane_type = General, 
+# initial bolus of propofol > 0)
 caseids = (
     set(df_trks.loc[df_trks['tname'] == 'Solar8000/ART_DBP', 'caseid']) &
     set(df_trks.loc[df_trks['tname'] == 'Solar8000/ART_SBP', 'caseid']) &
@@ -28,6 +34,7 @@ caseids = (
     set(clinical_info.loc[clinical_info['ane_type'] == 'General', 'caseid']) &
     set(clinical_info.loc[clinical_info['intraop_ppf'] > 0, 'caseid'])
 )
+# Filter out the cases with desflurane, prpofol, and remifentanil (we are focusing on sevoflurane)
 caseids -= set(df_trks.loc[df_trks['tname'] == 'Primus/EXP_DES', 'caseid'])
 caseids -= set(df_trks.loc[df_trks['tname'] == 'Primus/INSP_DES', 'caseid'])
 caseids -= set(df_trks.loc[df_trks['tname'] == 'Orchestra/PPF20_CE', 'caseid'])
@@ -36,6 +43,9 @@ caseids = list(caseids)
 caseids = caseids[:10]
 
 def preprocess_case(caseid, signs, clinical_info_df):
+    """
+    Preprocess the data for a given caseid
+    """
 
     print(f"Preprocessing case {caseid} started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     preprocessor = DataPreprocessor(caseid, signs)
