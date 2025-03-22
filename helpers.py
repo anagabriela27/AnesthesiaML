@@ -30,6 +30,7 @@ class DataPreprocessor:
                                                         'Solar8000/PLETH_SPO2', 'BIS/BIS',
                                                           'Primus/EXP_SEVO','Primus/INSP_SEVO'], 1)
         
+        case_values = np.round(case_values, 4)
         # Create a dataframe
         case_df = pd.DataFrame(case_values, columns=self.vital_signs)
         case_df['caseid'] = self.caseid
@@ -157,6 +158,118 @@ class DataPreprocessor:
             case_df_normalized, scaler = self.normalize_data(case_df_imputed)
             return case_df_normalized, (self.caseid,scaler)
         return None, None
+
+
+class DataPreparation(DataPreprocessor):
+    """
+    Prepares data for the models
+    """
+    def __init__(self, caseid, vital_signs, time_window_before=10, time_window_after=1,
+                 target = 'insp_sevo', test_size=0.2, random_state=42):
+        super().__init__(caseid, vital_signs)
+        self.time_window_before = time_window_before
+        self.time_window_after = time_window_after
+        self.test_size = test_size
+        self.random_state = random_state
+        self.target = target
+        self.scalers = {}
+
+
+    def prepare_data(self, clinical_info):
+        """
+        Prepare the data for a given caseid
+        """
+        # Preprocess the data
+        normalized_data, id_scaler = self.preprocess_data(clinical_info)
+
+        return normalized_data, id_scaler
+
+    def series_to_supervised(self, case_df):
+        """
+        Transforms a time series into a supervised learning dataset.
+
+        Parameters:
+        - case_df: DataFrame containing the vital signs for a single case.
+
+        Returns:
+        - df_all: DataFrame formatted with time windows for supervised learning.
+        """
+        df = case_df[self.vital_signs].astype('float32')
+
+        cols = []
+        col_names = []
+
+        # Input sequence (t-n, ..., t-1)
+        for i in range(self.time_window_before, 0, -1):
+            shifted_df = df.shift(i)
+            cols.append(shifted_df)
+            col_names.extend([f'{signal}(t-{i})' for signal in self.vital_signs])
+
+        # Current time step (t)
+        cols.append(df)
+        col_names.extend([f'{var}(t)' for var in self.vital_signs])
+
+        # Future steps of the target variable (t+1 to t+n), if applicable
+        if self.time_window_after > 0:
+            for i in range(1, self.time_window_after + 1):
+                future_shift = df[self.target].shift(-i)
+                cols.append(future_shift)
+                col_names.append(f'{self.target}(t+{i})')
+
+        # Combine all input and output columns
+        df_supervised = pd.concat(cols, axis=1)
+        df_supervised.columns = col_names
+
+        # Add 'caseid' and 'time' columns at the beginning
+        meta_cols = case_df[['caseid', 'time']].reset_index(drop=True)
+        df_all = pd.concat([meta_cols, df_supervised.reset_index(drop=True)], axis=1)
+
+        # Drop rows with missing values caused by shifting
+        df_all.dropna(inplace=True)
+
+        return df_all
+    
+    def group_sample_split(self, df, group_col):
+        """
+        Splits a DataFrame into train/test sets based on percentage of total samples,
+        while keeping all rows from each group (e.g. patient) in only one set.
+        
+        Parameters:
+        - df: DataFrame with the full data 
+        - group_col: column name that contains the group ID (e.g. 'caseid')
+        - test_size: float, percentage of samples to go into the test set
+        - random_state: for reproducibility
+        
+        Returns:
+        - train_df, test_df: DataFrames split accordingly
+        """
+        # Get the counts of each group (caseid)
+        group_counts = df[group_col].value_counts()
+        group_ids = group_counts.index.to_list()
+        
+        # Shuffle the group IDs
+        rng = np.random.default_rng(seed=self.random_state)
+        rng.shuffle(group_ids)
+
+        test_ids = []
+        accumulated_rows = 0
+        total_rows = len(df)
+
+        # Calculate the target number of rows for the test set (% of total rows)
+        target_test_rows = total_rows * self.test_size
+
+        # Select groups for the test set until the target number of rows is reached 
+        for gid in group_ids:
+            accumulated_rows += group_counts[gid]
+            test_ids.append(gid)
+            if accumulated_rows >= target_test_rows:
+                break
+
+        test_df = df[df[group_col].isin(test_ids)]
+        train_df = df[~df[group_col].isin(test_ids)]
+
+        return train_df, test_df
+
 
 def save_scaler(scaler, filename):
     """
