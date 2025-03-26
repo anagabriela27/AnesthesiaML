@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "vitaldb-analysis-ml",
+  "private_key_id": "44576c47aa9a027f893f9696394b9df5db00afcf",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC5CF/NkiwJLykX\nVE94VhSbwZlBaGaZtl/pNhyiQ6oIEpXtSF8r4lMwXhKUoI3wL1WzcXyHKqC9cDe7\neQV/O/wLDepGcb1rtOKUyhh6kkn6vlr76MOIPNgrMhvcoW0MahrHeL5UDGl8m+mU\nqe4QPUfLTgL0fz699vqeoBrLieFLrEDmowPHYchwuP5L0NqBRZpr8wzTgCHiloHU\nE9PjzZOM2yZTvm5Orox/1wACEKcz+kEkRqfvrIT26kDtyUiiJNjp5CnnwoC7a9/n\nEvU8m8eg1ZwwPFP6t387wWHOR5ryNr9THa43rf0nEnFSgoix5YXZLuSd25f3lJ+G\n27udYQAFAgMBAAECggEADGiWXCfgUiFahRj/V1eWfDeIeo1wzAAiAHbDhtI41d/B\nNC91SnEcGRNF9beqrR/PhIAo1Lu0GeArrKPaDYVNSsR9IIpCJLX1t/qxl4617V3U\npi4e5sUFzifHHI2qzXlUIGplgSdv745ZJMIcl/Q0G1s48YKTB5RHjFm6UkoF1Ngz\n78CSEqGRzuwgHZZSLg30DMXvm91woXQE9mIpsTQ5wmXsKx8Jsgs28UQT7cfgd2ey\nky2kO5xHthcSOHJEuNWqTn888ilXIRPdjpPDdDKCjX29hQPL9CEMCCCeXH/6LeHA\nnmpM1MrwD6ulEb+u1De1tBfxh+qxpCZXq34CwuStRQKBgQD5XkDxxliSiwvlAvJ4\nSZ04W/91Ir6tuksir+7HIuBsbKZqxD72uP2n8Vm9LhvR/Cp6aVpFdgx4FW3S+Hu5\nLyak38EWdS386cD35Vk7Nc28+oW18VSrBKSsL0UzAYhiWjWdRMlLQNxpyH4IDfSV\ntHIEdxcNEdIbyw0DBZX5Yhl4LwKBgQC99BzD8KGA5FcfW/LXn59oItMgSysWNadS\nL8l6w0LWeWb3umootlCq+sVrQqOQAMH5AWQPdP5ksn4ZwntzMWIXI54vu5tBN5oY\nCRq1MbxZSM6Wk6MphNbguhWjSfXgWzKOchz6djhzPUdsKEKousi6Eef75uQOrUI/\nm+kSRRkKCwKBgQCFsUKgXPafmmyGG05jrxPbY3dSFY6lFXuy3R/nI4uulZGjLBOV\nsxhLMdoq0s2Xhto/RrxfASsuNk7rDM1IOz88pbmfkLNXJPuP7CYq2G21I5sMMJZ0\nGckvhyhScD/ueu7Dol1JOzzwec0YBGNc36FBQ5fYKfW7cOFI/XWqfi2pgQKBgERk\n2dqfELek/82VwNlsauwG5ffRuODVTrqj5CqklbM9oRp/b2vbQS5e/qhBJT1bWHw8\nyPdby6EcN5U01lhCpqvoMjPDnAIecAhJdulY0BVhxqim3e+8GdZuig3yOmqey5RI\neDCiUm8D2GyUDnRMVKvSeLHVj7XNInZev8vJP1vDAoGAPJhdDQKZD1YbYWfJCaXk\nv8zDUvogR0p3dn18D5lPPUVuzo2azrDLUbou35a7fzpzYI+RYRACgLMFazF8P0i7\ndUwuT2weCxWKAaczAL7XsvYIzV09R0uacgyZ4mci6UNETHdXb9ijNC+v8tkjmDZC\n1PMs9k201wvtKqa5ngsA+WI=\n-----END PRIVATE KEY-----\n",
+  "client_email": "account-for-vitaldb@vitaldb-analysis-ml.iam.gserviceaccount.com",
+  "client_id": "105438673583603764998",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/account-for-vitaldb%40vitaldb-analysis-ml.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

@@ -129,11 +129,12 @@ class DataPreprocessor:
         
         return case_df_normalized, scaler
 
-    def denormalize_data(self, normalized_data, scaler):
+    def denormalize_data(self, normalized_data, scalers):
         """
         Denormalize the data using the scaler.
         """
         denormalized_data = normalized_data.copy()
+        scaler = scalers[self.caseid]
         denormalized_data[self.vital_signs] = scaler.inverse_transform(normalized_data[self.vital_signs])
         
         return denormalized_data
@@ -271,13 +272,13 @@ class DataPreparation(DataPreprocessor):
         return train_df, test_df
 
 
-def save_scaler(scaler, filename):
+def save_scalers(scaler, filename):
     """
     Save the scaler to a file using joblib.
     """
     joblib.dump(scaler, filename)
 
-def load_scaler(filename):
+def load_scalers(filename):
     """
     Load the scaler from a file using joblib.
     """
