@@ -12,9 +12,10 @@ class DataPreprocessor:
     """
     A class to preprocess the data for a given caseid.
     """
-    def __init__(self, caseid, vital_signs):
+    def __init__(self, caseid, vital_signs,clinical_info):
         self.caseid = caseid
         self.vital_signs = vital_signs
+        self.clinical_info = clinical_info
 
         # Initialize the min and max values for each vital sign
         self.min_values = None
@@ -51,12 +52,12 @@ class DataPreprocessor:
                 break
         return flag
 
-    def get_maintenance_phase(self, case_df, clinical_info):
+    def get_maintenance_phase(self, case_df):
         """
         Get the maintenance phase of the anesthesia for each case.
         """
         # Get operations start and end time for each case
-        df_merged = case_df.merge(clinical_info[['caseid', 'opstart', 'opend']], on='caseid')
+        df_merged = case_df.merge(self.clinical_info[['caseid', 'opstart', 'opend']], on='caseid')
 
         # Get the data corresponding only to the operation time (maintenance part of the anesthesia)
         df_maintenance = df_merged.query("opstart <= time <= opend").drop(columns=['opstart', 'opend'])
@@ -139,7 +140,7 @@ class DataPreprocessor:
         
         return denormalized_data
 
-    def preprocess_data(self, clinical_info):
+    def preprocess_data(self):
         """
         Preprocess the data for a given caseid
         """
@@ -147,7 +148,7 @@ class DataPreprocessor:
         case_df = self.create_case_df()
 
         # Get the maintenance phase of the anesthesia for each case
-        case_df_maintenance = self.get_maintenance_phase(case_df, clinical_info)
+        case_df_maintenance = self.get_maintenance_phase(case_df)
 
         # Set the outliers to null values
         case_df_nooutliers = self.set_outliers_to_null(case_df_maintenance)
@@ -165,9 +166,9 @@ class DataPreparation(DataPreprocessor):
     """
     Prepares data for the models
     """
-    def __init__(self, caseid, vital_signs, time_window_before=10, time_window_after=1,
+    def __init__(self, caseid, vital_signs, clinical_info,time_window_before=10, time_window_after=1,
                  target = 'insp_sevo', test_size=0.2, random_state=42):
-        super().__init__(caseid, vital_signs)
+        super().__init__(caseid, vital_signs,clinical_info)
         self.time_window_before = time_window_before
         self.time_window_after = time_window_after
         self.test_size = test_size
@@ -175,101 +176,164 @@ class DataPreparation(DataPreprocessor):
         self.target = target
         self.scalers = {}
 
-
-    def prepare_data(self, clinical_info):
+       
+    def build_lstm_case_arrays(self, case_df):
         """
-        Prepare the data for a given caseid
-        """
-        # Preprocess the data
-        normalized_data, id_scaler = self.preprocess_data(clinical_info)
-
-        return normalized_data, id_scaler
-
-    def series_to_supervised(self, case_df):
-        """
-        Transforms a time series into a supervised learning dataset.
-
-        Parameters:
-        - case_df: DataFrame containing the vital signs for a single case.
-
+        Creates the X, y arrays directly in format (samples, window, features) for LSTM
+        from a patient DataFrame (after normalization and imputation).
+        
         Returns:
-        - df_all: DataFrame formatted with time windows for supervised learning.
+        - X: np.array shape (n_samples, window, n_features)
+        - y: np.array shape (n_samples,)
         """
-        df = case_df[self.vital_signs].astype('float32')
+        input_signals = self.vital_signs
+        target_signal = self.target
 
-        cols = []
-        col_names = []
+        data = case_df[input_signals + [target_signal]].values
+        X_list = []
+        y_list = []
 
-        # Input sequence (t-n, ..., t-1)
-        for i in range(self.time_window_before, 0, -1):
-            shifted_df = df.shift(i)
-            cols.append(shifted_df)
-            col_names.extend([f'{signal}(t-{i})' for signal in self.vital_signs])
+        time_steps = self.time_window_before
+        for i in range(len(data) - time_steps - self.time_window_after + 1):
+            x_seq = data[i:i+time_steps, :-1]  # sinais vitais (exclui target)
+            y_val = data[i+time_steps + self.time_window_after - 1, -1]  # target no t+1
+            X_list.append(x_seq)
+            y_list.append(y_val)
 
-        # Current time step (t)
-        cols.append(df)
-        col_names.extend([f'{var}(t)' for var in self.vital_signs])
+        return np.array(X_list), np.array(y_list)
 
-        # Future steps of the target variable (t+1 to t+n), if applicable
-        if self.time_window_after > 0:
-            for i in range(1, self.time_window_after + 1):
-                future_shift = df[self.target].shift(-i)
-                cols.append(future_shift)
-                col_names.append(f'{self.target}(t+{i})')
+    def create_lstm_dataset(self,caseids):
+        """
+        Creates the X, y arrays directly in format (samples, window, features) for LSTM
+        from a patient DataFrame (after normalization and imputation).
+        
+        Returns:
+        - X: np.array shape (n_samples, window, n_features)
+        - y: np.array shape (n_samples,)
+        - caseids_extended: list of caseids for each sample
+        """
+        X_all = []
+        y_all = []
+        caseids_extended = []
 
-        # Combine all input and output columns
-        df_supervised = pd.concat(cols, axis=1)
-        df_supervised.columns = col_names
+        for cid in caseids:
+            self.caseid = cid
+            df = df[df['caseid'] == cid]
 
-        # Add 'caseid' and 'time' columns at the beginning
-        meta_cols = case_df[['caseid', 'time']].reset_index(drop=True)
-        df_all = pd.concat([meta_cols, df_supervised.reset_index(drop=True)], axis=1)
-
-        # Drop rows with missing values caused by shifting
-        df_all.dropna(inplace=True)
-
-        return df_all
+            if df is not None:
+                X, y = self.build_lstm_case_arrays(df)
+                X_all.append(X)
+                y_all.append(y)
+                caseids.extend([cid]*len(y))  # keep track of caseids
+        return X_all, y_all, caseids_extended
     
-    def group_sample_split(self, df, group_col):
+    def split_train_test(self, X_all, y_all, caseids_extended):
         """
-        Splits a DataFrame into train/test sets based on percentage of total samples,
-        while keeping all rows from each group (e.g. patient) in only one set.
-        
+        Split the data into train and test sets
         Parameters:
-        - df: DataFrame with the full data 
-        - group_col: column name that contains the group ID (e.g. 'caseid')
-        - test_size: float, percentage of samples to go into the test set
-        - random_state: for reproducibility
-        
+        - X_all: list of np.array shape (n_samples, window, n_features)
+        - y_all: list of np.array shape (n_samples,)
+        - caseids_extended: list of caseids for each sample
+
         Returns:
-        - train_df, test_df: DataFrames split accordingly
+        - X_train: np.array shape (n_samples, window, n_features)
+        - X_test: np.array shape (n_samples, window, n_features)
+        - y_train: np.array shape (n_samples,)
+        - y_test: np.array shape (n_samples,)
+        - train_mask: np.array shape (n_samples,) boolean mask 
+        - test_mask: np.array shape (n_samples,) boolean mask
+        - train_ids: list of caseids for the training set
+        - test_ids: list of caseids for the testing set        
         """
-        # Get the counts of each group (caseid)
-        group_counts = df[group_col].value_counts()
-        group_ids = group_counts.index.to_list()
-        
-        # Shuffle the group IDs
-        rng = np.random.default_rng(seed=self.random_state)
-        rng.shuffle(group_ids)
+        from sklearn.model_selection import train_test_split
 
-        test_ids = []
-        accumulated_rows = 0
-        total_rows = len(df)
+        X_all = np.concatenate(X_all, axis=0)   # shape: (total_samples, 300, 7)
+        y_all = np.concatenate(y_all, axis=0)   # shape: (total_samples,)
+        caseids = np.array(caseids_extended)             # shape: (total_samples,)
 
-        # Calculate the target number of rows for the test set (% of total rows)
-        target_test_rows = total_rows * self.test_size
+        unique_caseids = np.unique(caseids)
+        train_ids, test_ids = train_test_split(unique_caseids, test_size=self.test_size, random_state=self.random_state)
 
-        # Select groups for the test set until the target number of rows is reached 
-        for gid in group_ids:
-            accumulated_rows += group_counts[gid]
-            test_ids.append(gid)
-            if accumulated_rows >= target_test_rows:
-                break
+        # Máscaras booleanas
+        train_mask = np.isin(caseids, train_ids)
+        test_mask = np.isin(caseids, test_ids)
 
-        test_df = df[df[group_col].isin(test_ids)]
-        train_df = df[~df[group_col].isin(test_ids)]
+        X_train = X_all[train_mask]
+        y_train = y_all[train_mask]
+        X_test = X_all[test_mask]
+        y_test = y_all[test_mask]
 
-        return train_df, test_df
+        return X_train, X_test, y_train, y_test, train_mask, test_mask, train_ids, test_ids
+
+
+class SequenceGenerator:
+    def __init__(self, df_time_series, df_clinical_info, time_window_before = 10,time_window_after = 1, target_col = 'insp_sevo', static_features=['age','sex','weight','height','asa']):
+        self.df_time_series = df_time_series
+        self.df_clinical_info = df_clinical_info.set_index("caseid")  # Assumes 'caseid' is the key
+        self.time_window_before = time_window_before # Number of time steps before the target
+        self.time_window_after = time_window_after # Number of time steps after the target
+        self.target_col = target_col
+
+        #Static features to be used in the model (biometric data)
+        self.static_features = static_features if static_features else []
+
+    def sex_to_numerical(self):
+        """
+        If sex is one of the static features, convert it to numerical values.
+        M = 1, F = 0
+        """
+        if 'sex' in self.static_features:
+            self.df_clinical_info['sex']=self.df_clinical_info['sex'].map({'M': 1, 'F': 0})
+
+
+    def generate_sequences(self):
+        """
+        Creates the X, y arrays directly in format (samples, window, features) for LSTM
+            
+        Returns:
+            X (np.array): Input sequences of shape (num_samples, window_size, num_features).
+            y (np.array): Target values of shape (num_samples, 1).
+            patient_ids (list): Patient IDs corresponding to each sequence.
+        """
+        X, y, patient_ids = [], [], []
+
+        if 'sex' in self.static_features:
+            self.sex_to_numerical()
+
+        # Group by patient ID
+        for caseid, df_patient in self.df_time_series.groupby("caseid"):
+            df_patient = df_patient.sort_values("time")
+
+            time_series_features = [col for col in df_patient.columns if col not in ["caseid", "time"]]
+            data_values = df_patient[time_series_features].values
+            target_values = df_patient[self.target_col].values
+
+            #Get the values of the static features for the patient
+            if self.static_features:
+                static_row = self.df_clinical_info.loc[caseid, self.static_features]
+                static_values = static_row.values if isinstance(static_row, pd.Series) else static_row.to_numpy()
+            else:
+                static_values = None
+
+            # Calculate the number of sequences considering the time window
+            # Example: if len(df) = 10, self.time_window_before = 3:
+            # First sequence: data[0:3], target[4]; last sequence: data[7:10], target[10]
+            max_t = len(df_patient) - self.time_window_before
+            for i in range(max_t):
+                X_seq = data_values[i:i+self.time_window_before]
+                y_seq = target_values[i+self.time_window_before]
+
+                if static_values is not None:
+                    static_expanded = np.tile(static_values, (self.time_window_before, 1))
+                    X_seq = np.hstack([X_seq, static_expanded])
+
+                X.append(X_seq)
+                y.append(y_seq)
+                patient_ids.append(caseid)
+
+        return np.array(X), np.array(y), patient_ids
+
+
 
 
 def save_scalers(scaler, filename):
