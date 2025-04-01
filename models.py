@@ -1,41 +1,36 @@
-import time
 import pandas as pd
-import dask.dataframe as dd
+import joblib
 from sqlalchemy import create_engine
-from helpers import DataPreparation
-from dask.diagnostics import ProgressBar
+from helpers import DataPreparator
 
-# Lê os dados com pandas (pode ser mais seguro para SQLs complexos)
+#Load data from MySQL database
 engine = create_engine("mysql://root:Ana.mysql.18@127.0.0.1/vitaldb_anesthesiaml")
 df = pd.read_sql('SELECT * FROM vitaldb_preprocessed', con=engine)
+df_clinical_info = pd.read_sql('SELECT * FROM vitaldb_clinical_info', con=engine)
 
-vital_signs = df.columns[2:]
+# Create an instance of DataPreparator with the loaded data
+data_prep = DataPreparator(df, df_clinical_info, time_window_before=10, 
+                           static_features=['age', 'sex', 'asa'])
 
-# Função adaptada para Dask (sem alterações internas)
-def prepare_case(group, signs, time_window_before, time_window_after, target):
-    caseid = group['caseid'].iloc[0]
-    preparer = DataPreparation(caseid, signs, time_window_before, time_window_after, target)
-    prepared_data = preparer.series_to_supervised(group)
-    return prepared_data
+# Get the data in the required format for LSTM
+data_prep.generate_sequences()
 
-# Cria o meta automaticamente usando um grupo de amostra
-sample_caseid = df['caseid'].iloc[0]
-sample_group = df[df['caseid'] == sample_caseid]
-sample_result = prepare_case(sample_group, vital_signs, 5*60, 1, 'insp_sevo')
-meta = sample_result.iloc[0:0]
+# Split the data into training and testing sets
+data_prep.split_train_test()
 
-# Converte o DataFrame para Dask com várias partitions
-ddf = dd.from_pandas(df, npartitions=20)
+# Save the object with the generated sequences and splitted data to a file
+joblib.dump(data_prep, 'data_prep.pkl')
 
-# Função wrapper com os mesmos argumentos que prepare_case espera
-def prepare_case_dask(group):
-    return prepare_case(group, vital_signs, 5*60, 1, 'insp_sevo')
 
-# Executa o processamento com barra de progresso
-with ProgressBar():
-    final_df = ddf.groupby('caseid').apply(prepare_case_dask, meta=meta).compute()
+# Get the training and testing data into variables
+X_train = data_prep.X_train
+X_test = data_prep.X_test
+y_train = data_prep.y_train
+y_test = data_prep.y_test
+train_mask = data_prep.train_mask
+test_mask = data_prep.test_mask
+train_ids = data_prep.train_ids
+test_ids = data_prep.test_ids
 
-# (Opcional) Ordenar o resultado final
-final_df = final_df.sort_values(by=['caseid', 't']).reset_index(drop=True)
 
-print("Final dataframe shape:", final_df.shape)
+# Save the data 
