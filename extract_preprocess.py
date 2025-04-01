@@ -46,6 +46,9 @@ caseids = list(caseids)
 #caseids = caseids[:100]
 
 def preprocess_case(caseid, clinical_info_df, signs):
+    """
+    Preprocess the data for a single caseid
+    """
     preprocessor = DataPreprocessor(caseid, signs,clinical_info_df)
     normalized_data, id_scaler = preprocessor.preprocess_data()
     return normalized_data, id_scaler
@@ -83,7 +86,7 @@ def main(clinical_info_df):
     print(f"Total time taken for saving the dataframe: {end_time_save - start_time_save:.2f} seconds")
     
     # Save the scalers as a dictionary to a pickle file
-    joblib.dump(dict(scalers_list), 'scalers.pkl')
+    joblib.dump(dict(scalers_list), 'data/scalers.pkl')
     
     return preprocessed_df
 
