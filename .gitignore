@@ -3,3 +3,6 @@ test.ipynb
 data/
 env_variables.py
 models.ipynb
+
+# Ignore all .pkl files
+*.pkl	

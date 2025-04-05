@@ -111,14 +111,16 @@ class DataPreparator():
         unique_caseids = np.unique(self.caseids_extended)
         train_ids, test_ids = train_test_split(unique_caseids, test_size=self.test_size, random_state=random_state)
 
-        # Máscaras booleanas
+        # Create masks for train and test sets
         train_mask = np.isin(self.caseids_extended, train_ids)
         test_mask = np.isin(self.caseids_extended, test_ids)
 
-        self.X_train = self.X[train_mask]
-        self.y_train = self.y[train_mask]
-        self.X_test = self.X[test_mask]
-        self.y_test = self.y[test_mask]
+        # Convert the data to numpy arrays and apply the masks
+        # Convert to float32 for compatibility with TensorFlow
+        self.X_train = np.array(self.X, dtype=np.float32)[train_mask]
+        self.X_test = np.array(self.X, dtype=np.float32)[test_mask]
+        self.y_train = np.array(self.y, dtype=np.float32)[train_mask]
+        self.y_test = np.array(self.y, dtype=np.float32)[test_mask]
         self.train_mask = train_mask
         self.test_mask = test_mask
         self.train_ids = train_ids

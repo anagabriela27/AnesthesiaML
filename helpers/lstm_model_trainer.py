@@ -68,7 +68,7 @@ class LSTMModelTrainer(DataPreparator):
         val_loss = history.history['val_loss'][-1]
         return val_loss
 
-    def optimize_hyperparameters(self, n_trials=25, timeout=600):
+    def optimize_hyperparameters(self,storage, n_trials=25, timeout=600):
         """
         Optimize hyperparameters using Optuna.
         Args:
@@ -78,10 +78,59 @@ class LSTMModelTrainer(DataPreparator):
         def objective(trial):
             return self.create_model(trial)
 
-        study = optuna.create_study(direction="minimize", pruner=optuna.pruners.MedianPruner(n_startup_trials=2))
+        study = optuna.create_study(direction="minimize", 
+                                    storage= storage,
+                                    pruner=optuna.pruners.MedianPruner(n_startup_trials=2))
         study.optimize(objective, n_trials=n_trials, timeout=timeout)
-        #self.best_params = study.best_params
+        self.best_params = study.best_params
         return study
+
+    def train_best_model(self, best_params):
+        """
+        Train the best model using the optimized hyperparameters.
+        Args:
+            best_params: Dictionary containing the best hyperparameters.
+        Returns:
+            history: Training history of the model.
+        """
+        clear_session()
+
+        batchsize = best_params["batchsize"]
+        lstm_units = best_params["lstm_units"]
+        dropout_rate = best_params["dropout_rate"]
+        learning_rate = best_params["learning_rate"]
+        num_lstm_layers = best_params["num_lstm_layers"]
+
+        model = Sequential()
+        model.add(LSTM(lstm_units, input_shape=(self.X_train.shape[1], self.X_train.shape[2]), return_sequences=(num_lstm_layers > 1)))
+        model.add(Dropout(dropout_rate))
+
+        for _ in range(num_lstm_layers - 1):
+            model.add(LSTM(lstm_units, return_sequences=False))
+            model.add(Dropout(dropout_rate))
+
+        model.add(Dense(1))
+
+        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse',
+                    metrics=['mae', RootMeanSquaredError(), 'mape'])
+
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+        self.model = model  # guarda o modelo na instância, se quiseres usá-lo depois
+
+        history = model.fit(
+            self.X_train, self.y_train,
+            validation_split=0.2,
+            epochs=30,
+            batch_size=batchsize,
+            callbacks=[early_stopping],
+            verbose=1
+        )
+
+        return history
+
+
+
 
     def show_result(self, study):
         pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
