@@ -6,3 +6,4 @@ models.ipynb
 
 # Ignore all .pkl files
 *.pkl	
+*_gcp*

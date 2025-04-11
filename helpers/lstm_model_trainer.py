@@ -1,10 +1,7 @@
-"""
-This module provides helper functions for creating and training LSTM models
-with hyperparameter optimization using Optuna.
-"""
+import os
 import optuna
 from optuna.integration import TFKerasPruningCallback
-from optuna.trial import TrialState
+from optuna.visualization import plot_param_importances, plot_optimization_history, plot_parallel_coordinate
 
 from keras.backend import clear_session
 from keras.callbacks import EarlyStopping
@@ -14,138 +11,177 @@ from keras.models import Sequential
 from keras.optimizers import Adam
 
 from .data_preparator import DataPreparator
+import logging
+
+logging.basicConfig(level=logging.INFO,filename='lstm_model_trainer.log',
+                    format='%(asctime)s - %(levelname)s - %(message)s',filemode='w')
 
 
 class LSTMModelTrainer(DataPreparator):
     """
     A class that extends DataPreparator to include methods for creating, training, and optimizing an LSTM model.
     """
-    def create_model(self, trial):
+    def __init__(self, df_time_series, df_clinical_info, time_window_before=10, 
+                static_features=None, validation_split=0.2, epochs=30):
         """
-        Create and train an LSTM model using the given hyperparameters.
+        Initialize the LSTMModelTrainer with the provided data and parameters.
+        """
+        super().__init__(df_time_series, df_clinical_info, time_window_before, 
+                        target_col='insp_sevo', static_features=static_features)
+        self.validation_split = validation_split
+        self.epochs = epochs
+
+
+    def create_model_architecture(self, params):
+        """
+        Create and compile an LSTM model based on provided parameters.
         Args:
-            trial: The Optuna trial object used for hyperparameter optimization.
+            params (dict): Dictionary containing hyperparameters for the model.
+        Returns:
+            model (keras.Model): Compiled LSTM model.
         """
-        # Clear the session to avoid memory issues
         clear_session()
 
-        # Define the hyperparameters to be optimized
-        batchsize = trial.suggest_int("batchsize", 64, 128, step=32)
-        lstm_units = trial.suggest_int("lstm_units", 32, 64)
-        dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.3)
-        learning_rate = trial.suggest_categorical("learning_rate", [1e-4, 1e-3, 1e-2])
-        num_lstm_layers = trial.suggest_int('num_lstm_layers', 1, 2)
-
-        # Define the model architecture using the suggested hyperparameters
         model = Sequential()
-        model.add(LSTM(lstm_units, input_shape=(self.X_train.shape[1], self.X_train.shape[2]), return_sequences=(num_lstm_layers > 1)))
-        model.add(Dropout(dropout_rate))
+        model.add(LSTM(params['lstm_units'],
+                       input_shape=(self.X_train.shape[1], self.X_train.shape[2]),
+                       return_sequences=(params['num_lstm_layers'] > 1)))
+        model.add(Dropout(params['dropout_rate']))
 
-        for _ in range(num_lstm_layers - 1):
-            model.add(LSTM(lstm_units, return_sequences=False))
-            model.add(Dropout(dropout_rate))
+        for i in range(1, params['num_lstm_layers']):
+            model.add(LSTM(params['lstm_units'], return_sequences=(i < params['num_lstm_layers'] - 1)))
+            model.add(Dropout(params['dropout_rate']))
 
-        model.add(Dense(1))  # Output layer
+        model.add(Dense(1))
 
-        # Compile the model
-        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse', metrics=['mae', RootMeanSquaredError(), 'mape'])
+        model.compile(
+            optimizer=Adam(learning_rate=params['learning_rate']),
+            loss='mse',
+            metrics=['mae', RootMeanSquaredError()]
+        )
 
-        # Define callbacks for early stopping and pruning
+        return model
+
+    def objective(self, trial):
+        """
+        Objective function for Optuna hyperparameter optimization.
+        Args:
+            trial: The Optuna trial object used for hyperparameter optimization.
+        Returns:
+            val_loss: Validation loss of the model.
+        """
+        params = {
+            "batch_size": trial.suggest_int("batch_size", 64, 128, step=32),
+            "lstm_units": trial.suggest_int("lstm_units", 32, 64),
+            "dropout_rate": trial.suggest_float("dropout_rate", 0.1, 0.3),
+            "learning_rate": trial.suggest_categorical("learning_rate", [1e-4, 1e-3, 1e-2]),
+            "num_lstm_layers": trial.suggest_int("num_lstm_layers", 1, 2),
+        }
+
+        model = self.create_model_architecture(params)
+
         early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
         pruning_callback = TFKerasPruningCallback(trial, monitor='val_loss')
 
-        # Train the model
         history = model.fit(
             self.X_train, self.y_train,
-            validation_split=0.2,
-            epochs=30,
-            batch_size=batchsize,
+            validation_split=self.validation_split,
+            epochs=self.epochs,
+            batch_size=params["batch_size"],
             callbacks=[early_stopping, pruning_callback],
             verbose=1
         )
 
-        # Return the validation loss for optimization
-        val_loss = history.history['val_loss'][-1]
-        return val_loss
+        return history.history['val_loss'][-1]
 
-    def optimize_hyperparameters(self,storage, n_trials=25, timeout=600):
+    def optimize_hyperparameters(self, storage, n_trials=25, study_name="lstm_optuna_study", seed=42):
         """
         Optimize hyperparameters using Optuna.
-        Args:
-            n_trials: Number of trials for optimization.
-            timeout: Timeout for the optimization process.
-        """
-        def objective(trial):
-            return self.create_model(trial)
 
-        study = optuna.create_study(direction="minimize", 
-                                    storage= storage,
-                                    pruner=optuna.pruners.MedianPruner(n_startup_trials=2))
-        study.optimize(objective, n_trials=n_trials, timeout=timeout)
-        self.best_params = study.best_params
-        return study
-
-    def train_best_model(self, best_params):
-        """
-        Train the best model using the optimized hyperparameters.
         Args:
-            best_params: Dictionary containing the best hyperparameters.
+            storage (str): Database URL for storing the study.
+            n_trials (int): Number of trials to run.
+            study_name (str): Name of the Optuna study.
+            seed (int): Random seed for reproducibility.
+
         Returns:
-            history: Training history of the model.
+            optuna.study.Study: The Optuna study object containing the results.
         """
         clear_session()
 
-        batchsize = best_params["batchsize"]
-        lstm_units = best_params["lstm_units"]
-        dropout_rate = best_params["dropout_rate"]
-        learning_rate = best_params["learning_rate"]
-        num_lstm_layers = best_params["num_lstm_layers"]
+        try:
+            self.study = optuna.load_study(study_name=study_name, storage=storage)
+            logging.info("Loaded existing study '%s'.", study_name)
+        except KeyError:
+            self.study = optuna.create_study(
+                study_name=study_name,
+                direction="minimize",
+                storage=storage,
+                pruner=optuna.pruners.MedianPruner(n_startup_trials=5),
+            )
+            logging.info("Created new study '%s'.", study_name)
 
-        model = Sequential()
-        model.add(LSTM(lstm_units, input_shape=(self.X_train.shape[1], self.X_train.shape[2]), return_sequences=(num_lstm_layers > 1)))
-        model.add(Dropout(dropout_rate))
+        self.study.optimize(self.objective, n_trials=n_trials)
+        self.best_params = self.study.best_params
 
-        for _ in range(num_lstm_layers - 1):
-            model.add(LSTM(lstm_units, return_sequences=False))
-            model.add(Dropout(dropout_rate))
+        return self.study
 
-        model.add(Dense(1))
+    def plot_and_save(self, plot_func, name, saving_path=None):
+        """
+        Generate and display a plot using the provided Optuna plotting function.
+        Optionally saves the plot to a PNG file.
 
-        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse',
-                    metrics=['mae', RootMeanSquaredError(), 'mape'])
+        Args:
+            plot_func (callable): Optuna plotting function (e.g., plot_param_importances).
+            name (str): Name to use for the saved plot file.
+            saving_path (str or None): If provided, saves the plot to this directory.
+        """
+        try:
+            logging.info("Plotting %s...", name.replace("_", " "))
+            fig = plot_func(self.study)
+            fig.show()
 
-        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+            # Save figure if a path is provided
+            if saving_path:
+                os.makedirs(saving_path, exist_ok=True)
+                fig_path = os.path.join(saving_path, f"{name}.png")
+                fig.figure.savefig(fig_path)
+                logging.info("Saved %s plot to %s", name.replace("_", " "), fig_path)
 
-        self.model = model  # guarda o modelo na instância, se quiseres usá-lo depois
-
-        history = model.fit(
-            self.X_train, self.y_train,
-            validation_split=0.2,
-            epochs=30,
-            batch_size=batchsize,
-            callbacks=[early_stopping],
-            verbose=1
-        )
-
-        return history
+        except Exception as e:
+            logging.warning("Could not generate %s plot: %s", name.replace("_", " "), e)
 
 
+    def show_result(self, top_n=5, saving_path=None):
+        """
+        Display statistics and plots from the Optuna study results.
+        Optionally saves the plots to disk.
 
+        Args:
+            top_n (int): Number of top trials to display in the logs.
+            saving_path (str or None): Path to save generated plots. If None, only displays them.
+        """
+        logging.info("Study statistics:")
+        logging.info("  Number of finished trials: %d", len(self.study.trials))
+        logging.info("  Best trial: %d", self.study.best_trial.number)
 
-    def show_result(self, study):
-        pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
-        complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
+        # Log details about the best trial
+        best_trial = self.study.best_trial
+        logging.info("\nBest Trial:")
+        logging.info("  Value (Validation Loss): %.4f", best_trial.value)
+        logging.info("  Hyperparameters:")
+        for key, value in best_trial.params.items():
+            logging.info("    %s: %s", key, value)
 
-        print("Study statistics: ")
-        print("  Number of finished trials: ", len(study.trials))
-        print("  Number of pruned trials: ", len(pruned_trials))
-        print("  Number of complete trials: ", len(complete_trials))
+        # Log details about the top N trials
+        logging.info("\nTop %d Trials:", top_n)
+        for i, trial in enumerate(sorted(self.study.trials, key=lambda t: t.value)[:top_n]):
+            logging.info("  Trial %d:", i + 1)
+            logging.info("    Value: %.4f", trial.value)
+            for key, value in trial.params.items():
+                logging.info("    %s: %s", key, value)
 
-        print("Best trial:")
-        trial = study.best_trial
-
-        print("  Value: ", trial.value)
-
-        print("  Params: ")
-        for key, value in trial.params.items():
-            print("    {}: {}".format(key, value))
+        # Generate and optionally save visualizations
+        self.plot_and_save(plot_param_importances, "param_importances", saving_path)
+        self.plot_and_save(plot_optimization_history, "optimization_history", saving_path)
+        self.plot_and_save(plot_parallel_coordinate, "parallel_coordinates", saving_path)      
