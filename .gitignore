@@ -1,9 +1,6 @@
 DELETE/
-test.ipynb
-data/
-env_variables.py
-models.ipynb
 
-# Ignore all .pkl files
-*.pkl	
-*_gcp*
+# Ignore all pkl files called model_trainer.pkl inside of any folder
+# and subfolder
+
+**/model_trainer.pkl
