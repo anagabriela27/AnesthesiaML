@@ -1,5 +1,6 @@
 """
-This module contains a class to help prepare the data for LSTM models.
+Scope: Data Modeling
+Brief: This module contains a class to help prepare the data for LSTM models.
 """
 
 import pandas as pd

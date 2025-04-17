@@ -1,5 +1,6 @@
 """
-Utility functions for file and directory operations.
+Scope: Helpers
+Brief: Utility functions for file and directory operations.
 """
 import os
 import logging

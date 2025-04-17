@@ -1,5 +1,6 @@
 """
-This module contains a helper class with functions to preprocess the data.
+Scope: Data Preprocessing
+Brief: This module contains a helper class with functions to preprocess the data.
 """
 
 import pandas as pd

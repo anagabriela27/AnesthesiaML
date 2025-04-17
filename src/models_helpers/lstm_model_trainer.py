@@ -1,3 +1,7 @@
+"""
+Scope: Modeling
+Brief: This module contains a class to help train and optimize an LSTM model using Optuna for hyperparameter tuning.
+"""
 import os
 import optuna
 from optuna.integration import TFKerasPruningCallback
