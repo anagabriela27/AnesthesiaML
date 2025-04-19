@@ -12,13 +12,18 @@ import seaborn as sns
 from collections import defaultdict
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
+# -----------------------------------------------------------------------------------
+# Patient Info & Vital Sign Coverage
+# -----------------------------------------------------------------------------------
 
 def get_recorded_vital_signs_df(vital_signs_df, vital_signs):
     """
     Generate a DataFrame of recorded vital signs for each patient.
 
-    Args:
+    Arguments:
         patient_ids (list): List of unique patient IDs.
         vital_signs_df (pandas.DataFrame): DataFrame containing vital signs data.
         vital_signs (list): List of vital signs to consider.
@@ -51,70 +56,65 @@ def get_recorded_vital_signs_df(vital_signs_df, vital_signs):
     recorded_vital_signs_df = recorded_vital_signs_df.sort_values(by='TotalRecordedVitalSigns', ascending=False)
     return recorded_vital_signs_df
 
-def plot_recorded_vital_signs_distribution(recorded_vitalsigns_vital_signs_df):
+def plot_recorded_vital_signs_distribution(df):
     """
     Plot the distribution of recorded vital signs for patients.
 
-    Args:
-        recorded_vitalsigns_vital_signs_df (pandas.DataFrame): DataFrame containing recorded vital signs data.
+    Parameters:
+        df (pandas.DataFrame): DataFrame with a 'RecordedVitalSigns' column.
 
     Returns:
-        None
+        plotly.graph_objects.Figure: Bar plot figure.
     """
+    # Count unique combinations of recorded vital signs
+    vital_sign_sets = df['RecordedVitalSigns'].apply(frozenset).value_counts().reset_index()
+    vital_sign_sets.columns = ['RecordedVitalSigns', 'count']
     
-    # Create a DataFrame to count unique sets of recorded vital signs and their occurrence
-    unique_sets_count_vital_signs_df = pd.DataFrame(recorded_vitalsigns_vital_signs_df['RecordedVitalSigns'].apply(frozenset).value_counts())
+    # Add a column with the number of recorded signs for each combination
+    vital_sign_sets['Number of Vital Signs'] = vital_sign_sets['RecordedVitalSigns'].map(len)
+    vital_sign_sets['RecordedVitalSignsStrings'] = vital_sign_sets['RecordedVitalSigns'].apply(lambda x: ', '.join(sorted(x)))
 
-     # Calculate the number of vital signs for each set and add it as a new column
-    unique_sets_count_vital_signs_df['Number of Vital Signs'] = unique_sets_count_vital_signs_df.index.map(len)
+    # Order the DataFrame by the number of vital signs and then by the string representation
+    vital_sign_sets = vital_sign_sets.sort_values(by=['Number of Vital Signs', 'RecordedVitalSignsStrings'], ascending=[False, True])
+    vital_sign_sets['Number of Vital Signs'] = vital_sign_sets['Number of Vital Signs'].astype(str)
 
-    # Set the index column as a regular column and create a new column with recorded vital signs as strings
-    unique_sets_count_vital_signs_df.reset_index(inplace=True)
-    unique_sets_count_vital_signs_df['RecordedVitalSignsStrings'] = unique_sets_count_vital_signs_df['RecordedVitalSigns'].apply(lambda x: ', '.join(x))
+    # Create a color scale for the bars
+    color_scale = ['purple', 'lightseagreen','skyblue', 'green', 'red', 'yellow', 'cyan','mediumvioletred']
 
-    #Set each list of values in unique_sets_count_vital_signs_df['RecordedVitalSignsStrings'] in alphabetical order
-    unique_sets_count_vital_signs_df['RecordedVitalSignsStrings'] = unique_sets_count_vital_signs_df['RecordedVitalSignsStrings'].apply(lambda x: ', '.join(sorted(x.split(', '))))
+    # Plot the distribution of recorded vital signs
+    fig = px.bar(
+        vital_sign_sets, x='RecordedVitalSignsStrings', y='count', color='Number of Vital Signs',
+        title='<b>Distribution of Recorded Vital Signs</b>',
+        labels={
+            'RecordedVitalSignsStrings': '<b> Recorded Vital Signs </b>',
+            'count': '<b> Number of Patients (log scale) </b>'
+        },
+        width=1000, height=800, color_discrete_sequence=color_scale, text_auto=True
+    )
 
-    #Order unique_sets_count_vital_signs_df['RecordedVitalSignsStrings2'] in alphabetical order
-    unique_sets_count_vital_signs_df = unique_sets_count_vital_signs_df.sort_values(by='RecordedVitalSignsStrings')
+    fig.update_layout(
+        title=dict(x=0.5),
+        plot_bgcolor='white',
+        margin=dict(t=50, b=50, l=50, r=50)
+    )
+    fig.update_xaxes(tickangle=-70, tickfont=dict(size=12))
+    fig.update_yaxes(type="log", showgrid=False)
+    fig.update_traces(
+        textfont_size=9, textangle=0, textposition="outside",
+        cliponaxis=False, marker_line_color='black', marker_line_width=1
+    )
 
-    # Define custom color scale
-    color_scale = ['blue', 'green', 'red', 'purple', 'orange', 'yellow', 'cyan','mediumvioletred']
-
-    # Sort DataFrame by 'Number of Vital Signs' in ascending order
-    unique_sets_count_vital_signs_df = unique_sets_count_vital_signs_df.sort_values(by='Number of Vital Signs',ascending=False)
-
-    # Convert 'Number of Vital Signs' column to string
-    unique_sets_count_vital_signs_df['Number of Vital Signs'] = unique_sets_count_vital_signs_df['Number of Vital Signs'].astype(str)
-
-    # Plot the distribution of the RecordedVitalSigns with Plotly
-    fig = px.bar(unique_sets_count_vital_signs_df, x='RecordedVitalSignsStrings', y='count', color='Number of Vital Signs',
-                title='<b>Distribution of Recorded Vital Signs</b>', labels={'RecordedVitalSignsStrings': '<b> Recorded Vital Signs </b>', 'count': '<b> Number of Patients (log scale) </b>'},
-                width=800, height=600, color_discrete_sequence=color_scale, text_auto=True)
-
-    #Update axis
-    fig.update_xaxes(tickangle=-70, tickfont=dict(size=12))  # Customize x-axis tick font size and rotation
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')  #Set grid color to light gray
-
-    #Set yaxis in log scale
-    fig.update_yaxes(type="log")
-
-    # Set figure title to the middle
-    fig.update_layout(title=dict(x=0.5))
-
-    #Set background color to white
-    fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)'})
-
-    fig.update_traces(textfont_size=9, textangle=0, textposition="outside", cliponaxis=False,marker_line_color='black', marker_line_width=1)
-
-    # Show the plot
     return fig
+
+# -----------------------------------------------------------------------------------
+# Clinical Data Distributions
+# -----------------------------------------------------------------------------------
 
 def plot_intraop_drugs(clinical_info_df):
     """
     Plot the distribution of intraoperative drugs.
 
-    Args:
+    Arguments:
         clinical_info_df (pandas.DataFrame): DataFrame containing clinical information data.
 
     Returns:
@@ -138,20 +138,18 @@ def plot_intraop_drugs(clinical_info_df):
     intraop_columns = df_cases_renamed.columns[intraop_columns_pos]
 
     #Count, for each of the intraoperative columns, the number of patients with non-zero values
-    nonzero_counts = df_cases_renamed[intraop_columns].ne(0).sum()
+    counts = df_cases_renamed[intraop_columns].ne(0).sum().sort_values(ascending=False)
 
     #Plot the number of patients with non-zero values for each of the intraoperative columns 
     fig = plt.figure(figsize=(10,6))
 
-    nonzero_counts = nonzero_counts.sort_values(ascending=False)
-    sns.barplot(x=nonzero_counts.values, y=nonzero_counts.index, color='skyblue',edgecolor='black')
+    sns.barplot(x=counts.values, y=counts.index, color='skyblue',edgecolor='black')
 
     # Add the count values on top of the bars
-    for i in range(len(nonzero_counts)):
-        plt.text(nonzero_counts.values[i], i, nonzero_counts.values[i], ha = 'left', va = 'center', color='black')
+    for i, val in enumerate(counts.values):
+        plt.text(val, i, val, ha='left', va='center')
     plt.xlabel('Number of patients')
     plt.ylabel('Intraoperative drugs')
-    #plt.title('Number of patients with non-zero values for each of the intraoperative drugs')
     plt.grid(True, which='major', axis='x', linestyle='--', linewidth=0.5, color='gray', alpha=0.5)
 
     return fig
@@ -160,7 +158,7 @@ def plot_durations_hists(clinical_info_df):
     """
     Plot histograms of the durations of anesthesia and surgery.
 
-    Args:
+    Arguments:
         clinical_info_df (pandas.DataFrame): DataFrame containing clinical information data.
 
     Returns:
@@ -186,7 +184,7 @@ def descriptive_histogram(clinical_info_df,column,fig_title, xaxis_label = None,
     """
     Plot histograms of the columns of a dataframe and show the number of nulls and percentage of nulls.
 
-    Args:
+    Arguments:
         clinical_info_df (pandas.DataFrame): DataFrame containing clinical information data.
         column (str): Column name to plot.
         fig_title (str): Title of the figure.
@@ -201,8 +199,6 @@ def descriptive_histogram(clinical_info_df,column,fig_title, xaxis_label = None,
         nxticks (int, optional): Number of ticks on the x-axis. Defaults to 10.
         kde (bool, optional): Whether to show kernel density estimate. Defaults to False.
     """
-    import warnings
-    warnings.filterwarnings("ignore", category=UserWarning, module='seaborn')
 
     #Get number of nulls and percentage of nulls in each column
     nulls = clinical_info_df[column].isnull().sum()
@@ -270,195 +266,195 @@ def descriptive_histogram(clinical_info_df,column,fig_title, xaxis_label = None,
 
     return clinical_info_df_description,fig
 
-def vital_signs_boxplot(vital_signs_df, vital_signs,units, colors=None,size_legend=10,xlegend = 0.7,ylegend = 0.95,dpi=100,image_path=None):
+
+# -----------------------------------------------------------------------------------
+# Vital Signs Analysis
+# -----------------------------------------------------------------------------------
+
+def vital_signs_boxplot(vital_signs_df, vital_signs, units, colors=None,
+                        size_legend=10, xlegend=0.7, ylegend=0.95, dpi=100, image_path=None):
     """
-    Description:
-    Generates a boxplot for each specified vital sign in the provided DataFrame. 
-    Visualizes the distribution of each vital sign's values and includes statistical information such as minimum, maximum, quartiles, and fences.
-    Identifies the patients that are outliers for each vital sign.
-
-    Args:
-    - vital_signs_df: pandas DataFrame
-      Input DataFrame containing the data to be visualized.
-
-    - vital_signs: list
-      A list of vital signs for which boxplots are to be generated.
-
-    - units: str
-        An ordered list with the unit of measurement for the vital signs.
-
-    - colors: list
-      A list of colors to be used for each boxplot.
-
-    - size_legend: int, optional (default=10)
-      Font size for the statistical information displayed on the plot.
-
-    - xlegend: float, optional (default=0.7)
-      X-coordinate position for the statistical information text box.
-
-    - ylegend: float, optional (default=0.95)
-      Y-coordinate position for the statistical information text box.
-
-    - dpi: int, optional (default=100)
-      Dots per inch for the figure's resolution.
-
-    Returns:
-    - fig: matplotlib Figure object. The generated matplotlib Figure object containing the boxplots for the specified vital signs.
-    - outliers_dict: dict. Dictionary containing the patient ids that are outliers for each vital sign.
-
+        Generates a boxplot for each specified vital sign in the provided DataFrame.
+        Arguments:
+            vital_signs_df (pandas.DataFrame): DataFrame containing vital signs data.
+            vital_signs (list): List of vital signs to plot.
+            units (dict): Dictionary mapping vital signs to their units.
+            colors (list, optional): List of colors for the boxplots. Defaults to None.
+            size_legend (int, optional): Font size for the legend text. Defaults to 10.
+            xlegend (float, optional): X-coordinate for the legend text. Defaults to 0.7.
+            ylegend (float, optional): Y-coordinate for the legend text. Defaults to 0.95.
+            dpi (int, optional): Dots per inch for the figure. Defaults to 100.
+            image_path (str, optional): Path to save the images. If None, images are not saved. Defaults to None.
+        
+        Returns:
+            list: List of generated figures. If only one figure is created, it is returned directly.
     """
 
     if colors is None:
-        colors = ['skyblue','mediumvioletred','gold',
-          'orange','red','limegreen','navy','lightsteelblue',
-          'darkred','beige','darkgreen','darkblue','darkorange']
+        colors = ['skyblue', 'mediumvioletred', 'gold', 'orange', 'red', 'limegreen',
+                  'navy', 'lightsteelblue', 'darkred', 'beige', 'darkgreen', 'darkblue', 'darkorange']
 
-    for i in range(len(vital_signs)):
-        sign = vital_signs[i]
-        sign_vital_signs_df = vital_signs_df[['caseid',sign]]
+    figs = []
 
+    for sign, color in zip(vital_signs, colors):
         fig = plt.figure(dpi=dpi)
+        data = vital_signs_df[sign]
 
-        # Calculate statistical values
-        sign_description = sign_vital_signs_df[sign].describe()
-
-        #Round columns of sign_description to 4 decimal places
-        sign_description = sign_description.round(4)
-
-        sns.boxplot(y=sign_vital_signs_df[sign], color=colors[i],orient='v')
-        # Calculate lower and upper fences (assuming '25%' and '75%' keys are present in sign_description)
-        Q1 = sign_description['25%']
-        Q3 = sign_description['75%']
+        stats = data.describe().round(4)
+        Q1, Q3 = stats['25%'], stats['75%']
         IQR = Q3 - Q1
-        lower_fence = round((Q1 - 1.5 * IQR),4)
-        upper_fence = round((Q3 + 1.5 * IQR),4)
+        lower_fence = round(Q1 - 1.5 * IQR, 4)
+        upper_fence = round(Q3 + 1.5 * IQR, 4)
 
-        # Create text box with statistical information including lower and upper fences
-        plt.text(xlegend, ylegend,
-                f"Min: {sign_description['min']}\n"
-                f"Q1: {Q1}\n"
-                f"Median: {sign_description['50%']}\n"
-                f"Q3: {Q3}\n"
-                f"Max: {sign_description['max']}\n"
-                f"Lower Fence: {lower_fence}\n"
-                f"Upper Fence: {upper_fence}",
-                fontsize=size_legend,
-                verticalalignment='top', horizontalalignment='left',
-                transform=plt.gca().transAxes,
-                bbox=dict(facecolor='lightgray', alpha=0.5))
-        
-
-        #Set y grid
+        sns.boxplot(y=data, color=color, orient='v')
         plt.grid(axis='y', linestyle='--', alpha=0.4, zorder=1)
 
-        if sign not in ['BIS']:
-            plt.ylabel(f'Values ({units[sign]})')
-
-        else:
-            #BIS is unitless
-            plt.ylabel('Values')
-        
-        if sign == 'SPO2':
-            #Set yaxis to logarithmic scale
+        label = (
+            'Values (%,logscale)' if sign == 'spo2'
+            else f"Values ({units.get(sign, '')})" if sign != 'bis'
+            else 'Values'
+        )
+        if sign == 'spo2':
             plt.yscale('log')
 
-            #Set yaxis label
-            plt.ylabel('Values (%,logscale)')
-
-        #Put the title a little bit higher
+        plt.ylabel(label)
         plt.title(f'{sign} values Boxplot', y=1.02)
 
-        #Save in svg format
-        if image_path is not None:
-            plt.savefig(image_path+sign+'.svg', format='svg')
-    return fig
+        # Add stats text box
+        plt.text(xlegend, ylegend,
+                 f"Min: {stats['min']}\nQ1: {Q1}\nMedian: {stats['50%']}\nQ3: {Q3}\n"
+                 f"Max: {stats['max']}\nLower Fence: {lower_fence}\nUpper Fence: {upper_fence}",
+                 fontsize=size_legend, transform=plt.gca().transAxes,
+                 verticalalignment='top', horizontalalignment='left',
+                 bbox=dict(facecolor='lightgray', alpha=0.5))
+
+        if image_path:
+            plt.savefig(f"{image_path}{sign}.svg", format='svg')
+
+        figs.append(fig)
+
+    return figs[0] if len(figs) == 1 else figs
     
-def get_timediffs(vital_signs_df, vital_signs,rows_timediff=1):
+def get_timediffs(vital_signs_df, vital_signs, rows_timediff=1):
     """
-    Description:
-    This function calculates the time differences between consecutive non-null values of vital signs in a DataFrame grouped by 'caseid'. 
-    It iterates over each specified vital sign and computes the time differences for each group separately.
-
-    Args:
-    - vital_signs_df: pandas DataFrame
-      Input DataFrame containing data to be processed.
-
-    - vital_signs: list
-      A list of vital signs for which time differences are to be calculated (are columns in the DataFrame)
-
-    - rows_timediff: int, default=1
-      The time difference between consecutive rows in the DataFrame. The default value is 1, which corresponds to 1 minute.
+    Calculates time differences between consecutive non-null values of specified vital signs,
+    grouped by 'caseid'.
+    
+    Arguments:
+        vital_signs_df (pandas.DataFrame): DataFrame containing vital signs data.
+        vital_signs (list): List of vital signs to calculate time differences for.
+        rows_timediff (int): Number of rows to consider for time difference calculation. Default is 1.
 
     Returns:
-    - vital_signs_df_sr: pandas DataFrame
-      A copy of the input DataFrame with additional columns containing time differences for each vital sign specified in 'vital_signs'.
-    The time differences are computed in minutes and added as new columns with names formatted as 'diffs_vital_sign'.
+        pandas.DataFrame: DataFrame with additional columns for time differences of specified vital signs.
     """
-    import pandas as pd
+    df = vital_signs_df.reset_index(drop=True).copy()  # evita criar a coluna 'index'
 
-    vital_signs_df_sr = vital_signs_df.copy()
+    for sign in vital_signs:
+        def compute_diffs(group):
+            idx = group[sign].notnull()
+            diffs = group.loc[idx].index.to_series().diff().fillna(0) * rows_timediff
+            group[f'diffs_{sign}'] = diffs
+            return group
 
-    # Iterate over each vital sign
-    for vital_sign in vital_signs:
-        # Group by 'caseid'
-        grouped = vital_signs_df_sr.groupby('caseid')
-        
-        # Initialize an empty list to store time differences
-        time_diffs = []
-        
-        # Iterate over each group
-        for name, group in grouped:
-            # Get the indices of non-null values
-            non_null_indices = group[vital_sign].notnull()
+        df = df.groupby('caseid', group_keys=False).apply(compute_diffs)
 
-            # Calculate the time differences between non-null values based on their index positions
-            non_null_index_positions = group.loc[non_null_indices].index
-            diffs = pd.Series(non_null_index_positions).diff().fillna(0) * rows_timediff  # converting the difference to time in seconds
-            #diffs = diffs / 60.0  # converting seconds to minutes
-            diffs.index = non_null_index_positions
-            diffs.name = f'diffs_{vital_sign}'
+    return df.drop(columns=vital_signs)
 
-            # Join the time differences back to the original group
-            group = group.join(diffs, how='outer')
-            
-            # Append the calculated time differences to the list
-            time_diffs.append(group)
-        
-        # Concatenate the groups back into a DataFrame
-        vital_signs_df_sr = pd.concat(time_diffs)
-        
-    # Dropping the original vital sign columns if needed
-    vital_signs_df_sr = vital_signs_df_sr.drop(columns=vital_signs)
-
-    return vital_signs_df_sr
-
-def plot_timeseries(vital_signs_df,id,vital_signs,secondary_axis_signs=None,xaxis_range=False,height=800,width=1300,startend=None, markers=True, connectgaps=True,colors = None):
+def plot_correlation_heatmap(vital_signs_df, tickssize=16, width=800, height=700,
+                              fig_title="Correlation Matrix between Vital Signs"):
     """
-        Description:
-        This function generates a plotly figure with the time series of the specified vital signs for a given patient ID.
+    Plots a heatmap of the correlation matrix of the Z-score normalized data using Plotly.
+    Shows only the lower triangle of the matrix (including the diagonal).
 
-        Args:
+    Arguments:
+        vital_signs_df (pandas.DataFrame): DataFrame containing the vital signs data.
+        tickssize (int, optional): Font size for the x and y axis ticks. Defaults to 16.
+        width (int, optional): Width of the figure. Defaults to 800.
+        height (int, optional): Height of the figure. Defaults to 700.
+        fig_title (str, optional): Title of the figure. Defaults to "Correlation Matrix between Vital Signs".
+
+    Returns:
+        plotly.graph_objects.Figure: The generated heatmap figure.
+    """
+    # Normalize the data using Z-score
+    def zscore_normalize(group):
+        return group.apply(lambda x: (x - x.mean()) / x.std() if x.name not in ['caseid', 'time'] else x)
+
+    # Apply Z-score normalization to each caseid and reset the index
+    zscore_normalized_df = vital_signs_df.groupby('caseid').apply(zscore_normalize).reset_index(drop=True)
+
+    # Calculate the correlation matrix
+    correlation_matrix = zscore_normalized_df.drop(columns=['caseid', 'time']).corr()
+
+    # Boolean mask for the lower triangle of the correlation matrix
+    mask = np.tril(np.ones(correlation_matrix.shape), k=0).astype(bool)
+
+    # Replace the upper triangle with None
+    correlation_values_masked = correlation_matrix.copy()
+    correlation_values_masked[~mask] = None
+
+    # Create the heatmap using Plotly
+    fig = go.Figure(data=go.Heatmap(
+        z=correlation_values_masked.values,
+        x=correlation_values_masked.columns,
+        y=correlation_values_masked.index,
+        zmid=0,
+        colorscale='RdBu_r',
+        colorbar=dict(title='Correlation'),
+        zmin=-1, zmax=1
+    ))
+
+    # Set the layout of the heatmap
+    fig.update_layout(
+        title=fig_title,
+        title_x=0.5,
+        width=width,
+        height=height,
+        xaxis=dict(tickfont=dict(size=tickssize)),
+        yaxis=dict(tickfont=dict(size=tickssize), autorange='reversed'),
+        plot_bgcolor='white',
+        margin=dict(l=40, r=40, t=40, b=40)
+    )
+
+    return fig
+
+# -----------------------------------------------------------------------------------
+# Vital Signs Time Series Plotting
+# -----------------------------------------------------------------------------------
+
+def plot_timeseries(vital_signs_df,caseid,vital_signs,general_info_df = None,secondary_axis_signs=None,height=800,width=1300,
+                    startendline=True, markers=True, connectgaps=True,color_map = None):
+    """
+        Generates a plotly figure with the time series of the specified vital signs for a given patient ID.
+
+        Arguments:
         - vital_signs_df: pandas DataFrame.DataFrame containing the vital signs data.
-        - id: int. The patient ID.
-        - vital_signs: list. A list of vital signs to be included in the plot.
-        - xaxis_range: bool, optional (default=False). If True, set the x-axis range to the minimum and maximum values of the 'Data' column.
+        - caseid: int. The patient ID.
+        - vital_signs: list. A list of vital signs to be included in the plot.  
+        - general_info_df: pandas DataFrame. DataFrame containing general information about the patient.      
         - height: int, optional (default=800). The height of the plot in pixels.
         - width: int, optional (default=1300). The width of the plot in pixels.
-        - startend: list, optional (default=None). A list containing the start and end dates for the x-axis range.
+        - startendline: list, optional (default=None). A list containing the start and end dates for the x-axis range.
         - markers: bool, optional (default=True). If True, display markers on the plot.
         - connectgaps: bool, optional (default=True). If True, connect the gaps in the data.
 
         Returns:
         - fig: plotly.graph_objs._figure.Figure. The generated plotly figure.
     """
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-    import numpy as np
-    
-    vital_signs_id = vital_signs_df[vital_signs_df['caseid']==id]
+    # Color mapping
 
-    if colors == None:
-        colors = ['purple','orange','green','blue','red','orange']
+    if color_map is None:
+        color_map = {
+            'sbp': 'teal', 'mbp': 'slateblue', 'dbp': 'lightseagreen',
+            'hr': 'navy', 'spo2': 'darkorange', 'bis': 'purple',
+            'insp_sevo': 'seagreen', 'exp_sevo': 'yellowgreen'
+        }
+        
+    vital_signs_id = vital_signs_df[vital_signs_df['caseid'] == caseid].copy()
+    vital_signs_id['time'] = vital_signs_df['time'] / 60  # convert to minutes
+
+    
     signs_legend_ymain = []
     signs_legend_ysec = []
 
@@ -466,7 +462,6 @@ def plot_timeseries(vital_signs_df,id,vital_signs,secondary_axis_signs=None,xaxi
 
     if markers:
         mode = 'lines+markers'
-
     else:
         mode = 'lines'
 
@@ -480,7 +475,7 @@ def plot_timeseries(vital_signs_df,id,vital_signs,secondary_axis_signs=None,xaxi
                                 y=vital_signs_id[sign], 
                                 name=sign,
                                 mode=mode,  # Add markers
-                                line=dict(color=colors[vital_signs.index(sign)]),
+                                line=dict(color=color_map[sign]),
                                 marker=dict(size =4)), 
                                 secondary_y=True)
 
@@ -488,325 +483,344 @@ def plot_timeseries(vital_signs_df,id,vital_signs,secondary_axis_signs=None,xaxi
             
         else:    
             fig.add_trace(go.Scatter(x=np.array(vital_signs_id[['time', sign]]['time']), 
-                                y=vital_signs_id[sign], 
+                                y=vital_signs_id[sign],
                                 name=sign,
                                 mode=mode,  # Add markers
-                                line=dict(color=colors[vital_signs.index(sign)]),
-                                marker=dict(size =4)), 
+                                line=dict(color=color_map[sign]),
+                                marker=dict(size =4)),
                                 secondary_y=False)
             signs_legend_ymain = signs_legend_ymain + [sign]
         
                 
         fig.update_traces(connectgaps=connectgaps)
 
-        #Set x axis limits
-        if xaxis_range:
-            data_min = vital_signs_id.loc[vital_signs_id[vital_signs].dropna(how='all').index[0]]['time'] #Get the first data point with non-null values in the vital signs
-            data_max = vital_signs_id.loc[vital_signs_id[vital_signs].dropna(how='all').index[-1]]['time'] #Get the last data point with non-null values in the vital signs
-            fig.update_xaxes(range=[data_min, data_max])
-
         #Set y axis title
         fig.update_yaxes(title_text=f"{signs_legend_ymain} Values", secondary_y=False)
         fig.update_yaxes(title_text=f"{signs_legend_ysec} Values", secondary_y=True)
 
-        fig.update_layout(title_text=f"Vital signs: {vital_signs} - Patient {id}", xaxis_title='<b> Time </b>',
-                            title=dict(x=0.5, xanchor='center', yanchor='top'), title_font_size=18,height=height,width=width)
+        
+    # Add vertical lines using general_info_df
+    if startendline and general_info_df is not None:
+        general_info_case = general_info_df[general_info_df['caseid'] == caseid]
+        if not general_info_case.empty:
+            opstart, opend = general_info_case.iloc[0][['opstart', 'opend']] / 60
+            anestart, aneend = general_info_case.iloc[0][['anestart', 'aneend']] / 60
+
+            if not np.isnan(anestart):
+                fig.add_vline(x=anestart, line_dash="dash", line_color="crimson", line_width=2)
+            if not np.isnan(aneend):
+                fig.add_vline(x=aneend, line_dash="dash", line_color="crimson", line_width=2)
+            if not np.isnan(opstart):
+                fig.add_vline(x=opstart, line_dash="dash", line_color="darkred", line_width=2)
+            if not np.isnan(opend):
+                fig.add_vline(x=opend, line_dash="dash", line_color="darkred", line_width=2)
+
+        # Add invisible traces to include dashed lines in the legend
+        if not (np.isnan(aneend) and np.isnan(anestart)):
+            fig.add_trace(
+                go.Scatter(
+                    x=[aneend, aneend],
+                    y=[0, 1],
+                    mode='lines',
+                    name="Anesthesia Start/End",
+                    line=dict(color="crimson", dash="dash", width=2),  # Use width > 0 for the legend
+                    showlegend=True
+                )
+            )
+        if not (np.isnan(opstart) and np.isnan(opend)):
+            fig.add_trace(
+                go.Scatter(
+                    x=[opstart, opstart],
+                    y=[0, 1],
+                    mode='lines',
+                    name="Surgery Start/End",
+                    line=dict(color="darkred", dash="dash", width=2),  # Use width > 0 for the legend
+                    showlegend=True
+                )
+            )
+
+        fig.update_layout(title_text=f"Vital signs: {vital_signs} - Patient {caseid}",
+                           xaxis_title='<b> Time </b>',
+                            title=dict(x=0.5, xanchor='center', yanchor='top'),
+                              title_font_size=18,height=height,width=width)
         
     return fig
 
-def plot_multiple_timeseries(vital_signs_df,id,vital_signs,
-                   markers=True,height=800, width=1400,xlegend=None,ylegend=None,size_legend=12,connectgaps=True, mode='lines',):
+def plot_multiple_timeseries_plotly(vital_signs_df, general_info_df, caseid, vital_signs,
+                                    markers=True, height=800, width=1400,
+                                    xlegend=None, ylegend=None,
+                                    size_legend=12, connectgaps=True, startendline=True):
     """
-    Function to plot multiple time series for a given patient id
+    Function to plot multiple time series for a given patient using Plotly,
+    with optional vertical lines for surgery and anesthesia events.
+    This function does the same as plot_multiple_series_mplb but uses Plotly for plotting.
 
-        Args:
-        - vital_signs_df: pandas DataFrame.DataFrame containing the vital signs data.
-        - id: int. The patient ID.
-        - vital_signs: list. A list of vital signs to be included in the plot.
-        - markers: bool, optional (default=True). If True, display markers on the plot.
-        - xaxis_range: str, optional (default='nonnulldata'). The range of the x-axis. Possible values are 'nonnulldata', 'startend', or None.
-        - height: int, optional (default=800). The height of the plot in pixels.
-        - width: int, optional (default=1400). The width of the plot in pixels.
-        - xlegend: float, optional (default=None). The x-coordinate position for the legend.
-        - ylegend: float, optional (default=None). The y-coordinate position for the legend.
-        - size_legend: int, optional (default=12). The font size for the legend.
-
-        Returns:
-        - fig: plotly.graph_objs._figure.Figure. The generated plotly figure.
-    """
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-    import plotly.express as px
-    import numpy as np
-
-    if markers: 
-        mode = 'lines+markers'
-    elif markers == False:
-        mode = 'lines'        
-
-    vital_signs_id = vital_signs_df[vital_signs_df['caseid']==id]
+    Arguments:
+        - vital_signs_df (pd.DataFrame): Vital signs time-series data.
+        - general_info_df (pd.DataFrame): Info with start/end times for surgery/anesthesia.
+        - caseid (int): Patient ID.
+        - vital_signs (list): List of vital signs to plot.
+        - markers (bool): Show markers in the plot.
+        - height, width (int): Plot dimensions.
+        - xlegend, ylegend (float): Legend positioning.
+        - size_legend (int): Font size of the legend.
+        - connectgaps (bool): Connect missing data.
+        - startendline (bool): Show vertical lines for surgery/anesthesia events.
     
-    #Convert to minutes
-    vital_signs_id['time'] = vital_signs_id['time'].apply(lambda x: x/60)
-
-
-    colors = ['purple','orange','green','maroon','blue','crimson','yellowgreen','seagreen','red','lightblue']
-
-    nodatasigns = []
-
-    for signal in vital_signs:
-        sign_data = vital_signs_id[signal]
-
-        #If all values are either null or 0, then there is no data for this signal
-        if (sign_data[sign_data.notna()].eq(0).all()) or (sign_data.isna().all()):
-            print(f'No data for {signal}')
-            nodatasigns.append(signal)  # Add sign to the removal list
-
-    # Remove signals with no data from the list of vital_signs to plot
-    for signal in nodatasigns:
-        vital_signs.remove(signal)
-
-    # Create a new figure with subplots for each vital sign
-    num_signals = len(vital_signs)
-    num_cols = int(np.ceil(np.sqrt(num_signals)))
-    num_rows = int(np.ceil(num_signals / num_cols))
-
-    fig = make_subplots(rows=num_rows, cols=num_cols)  
-
-    # Iterate over each sign
-    for i, sign in enumerate(vital_signs, start=1):
-        sign_data = vital_signs_id[['time',sign]]
-
-        row = (i - 1) // num_cols + 1
-        col = (i - 1) % num_cols + 1
-
-        # Add trace each sign in a different subplot
-        if sign != 'MBP' and sign != 'SBP' and sign != 'DBP':
-            # Add data for the current sign
-            fig.add_trace(go.Scatter(x=sign_data['time'], y=sign_data[sign],
-                                    mode=mode,name=sign,
-                                    line=dict(color=colors[vital_signs.index(sign)],width = 1),
-                                    marker=dict(color=colors[vital_signs.index(sign)],size = 3)),row=row, col=col)
-            
-            fig.update_yaxes(title_text=f"<b> {sign} Values</b>",
-                            tickfont=dict(size=10), gridcolor='white', title_font=dict(size=12),row=row, col=col,title=dict(standoff=0))
-            
-            fig.update_xaxes(title_text= "<b> Time  </b>",gridcolor='white', matches='x',row=row, col=col)
-        
-            
-        ############################## Join SBP, MBP and DBP in the same subplot ###################################
-        else: #When sign is MBP, add traces for 'DBP' and 'SBP' with different colors
-            signs_T = ['SBP','MBP','DBP']
-        
-            # Select specific colors from the 'Viridis' color scale for this subplot
-            t_colors =[px.colors.sequential.Viridis[3],px.colors.sequential.Viridis[0],px.colors.sequential.Viridis[5]]
-            fig.update_yaxes(title_text="<b> Blood Pressure Values (mmHg)</b>",
-                                tickfont=dict(size=10), gridcolor='#f7f7f5', title_font=dict(size=10),row=row, col=col,title=dict(standoff=0))
-            
-            for sign_T, color_T in zip(signs_T, t_colors):
-                sign_T_data = vital_signs_id[['time',sign_T]]
-                
-                fig.add_trace(go.Scatter(x=sign_T_data['time'], y=sign_T_data[sign_T],
-                                            mode=mode, name=sign_T,
-                                            line=dict(color=color_T,width = 1), marker=dict(color=color_T,size = 3)), row=row, col=col)
-            
-                fig.update_xaxes(title_text= "<b> Time  </b>",gridcolor='white', matches='x',row=row, col=col)
-
-
-    # Update layout to place 
-    #Set title in the middle of the figure
-    fig.update_layout(legend=dict(
-            # Adjust the y position of the legend
-                bgcolor='#f7f7f5',
-                bordercolor='gray',
-                borderwidth=2,
-                font = dict(size=12)
-            ))
-    fig.update_layout(height=height, width=width, title_text=f"<b> Vital Signs Time Series for Patient {id} </b>",
-                    title=dict(x=0.5, xanchor='center', yanchor='top'),plot_bgcolor='#f7f7f5')
-
-    if (xlegend != None) and (ylegend != None):
-        xlegend = xlegend
-        ylegend = ylegend
-
-        fig.update_layout(legend=dict(
-            x=xlegend,
-            y=ylegend,
-            font = dict(size=size_legend)
-        ))
-
-    fig.update_traces(connectgaps=connectgaps)
-
-    return fig 
-
-def plot_multiple_timeseries_mplb(vital_signs_df, id, vital_signs,
-                                  general_info_df=None, startendline=False,
-                                width=12, height=8, xlegend=1.25, ylegend=0.8, size_legend=10, title=True):
-    """
-    Plots the time series of the vital signs for a given patient.
-
-    Args:
-    vital_signs_df (pd.DataFrame): DataFrame containing the vital signs data.
-    id (int): ID of the patient to plot.
-    vital_signs (list): List of vital signs to plot.
-    general_info_df (pd.DataFrame): DataFrame containing the general information of the patients. Default is None.
-    startendline (bool): Whether to plot vertical lines for the start and end of the surgery. Default is False.
-    width (int): Width of the figure. Default is 12.
-    height (int): Height of the figure. Default is 8.
-    xlegend (float): x-coordinate of the legend. Default is 1.25.
-    ylegend (float): y-coordinate of the legend. Default is 0.8.
-    size_legend (int): Size of the legend. Default is 10.
-    title (bool): Whether to add a title to the plot. Default is True.
-
     Returns:
-    fig (matplotlib.figure.Figure): Figure containing the plot.
+        - fig (go.Figure): Plotly figure object.
     """
+    mode = 'lines+markers' if markers else 'lines'
 
-    import matplotlib.pyplot as plt
-    import numpy as np
-    
-    vital_signs_id = vital_signs_df[vital_signs_df['caseid'] == id]
+    df_case = vital_signs_df[vital_signs_df['caseid'] == caseid].copy()
+    df_case['time'] = df_case['time'] / 60  # convert to minutes
 
+    # Remove vital signs with no valid values
+    valid_signs = []
+    for sign in vital_signs:
+        values = df_case[sign]
+        if not (values.isna().all() or (values[values.notna()] == 0).all()):
+            valid_signs.append(sign)
+        else:
+            print(f"No data for {sign}")
 
-    #Conver to minutes
-    vital_signs_id['time'] = vital_signs_id['time'].apply(lambda x: x/60)
+    if not valid_signs:
+        raise ValueError("No valid signals to plot.")
 
-    colors = ['purple', 'orange', 'green', 'darksalmon', 'navy', 'crimson', 'yellowgreen', 'seagreen', 'red']
+    bp_signals = {'sbp', 'mbp', 'dbp'}
+    bp_included = any(sign in bp_signals for sign in valid_signs)
+    non_bp_signs = [s for s in valid_signs if s not in bp_signals]
+    total_plots = len(non_bp_signs) + (1 if bp_included else 0)
 
-    nodatasigns = []
+    num_cols = int(np.ceil(np.sqrt(total_plots)))
+    num_rows = int(np.ceil(total_plots / num_cols))
 
-    for signal in vital_signs:
-        sign_data = vital_signs_id[signal]
+    fig = make_subplots(rows=num_rows, cols=num_cols)
 
-        # If all values are either null or 0, then there is no data for this signal
-        if (sign_data[sign_data.notna()].eq(0).all()) or (sign_data.isna().all()):
-            print(f'No data for {signal}')
-            nodatasigns.append(signal)  # Add sign to the removal list
+    # Color palette
+    # colors = ['purple', 'orange', 'green', 'maroon', 'blue', 'crimson',
+    #           'yellowgreen', 'seagreen', 'red', 'lightblue']
+    # color_map = {sign: colors[i % len(colors)] for i, sign in enumerate(valid_signs)}
+    color_map = {
+            'sbp': 'teal', 'mbp': 'slateblue', 'dbp': 'lightseagreen',
+            'hr': 'navy', 'spo2': 'darkorange', 'bis': 'purple',
+            'insp_sevo': 'seagreen', 'exp_sevo': 'yellowgreen'
+        }
 
-    # Remove signals with no data from the list of vital_signs to plot
-    for signal in nodatasigns:
-        vital_signs.remove(signal)
+    i = 0  # subplot index
+    for sign in non_bp_signs:
+        row, col = divmod(i, num_cols)
+        row += 1
+        col += 1
+        fig.add_trace(
+            go.Scatter(
+                x=df_case['time'],
+                y=df_case[sign],
+                mode=mode,
+                name=sign,
+                line=dict(color=color_map[sign], width=1),
+                marker=dict(size=3)
+            ),
+            row=row, col=col
+        )
+        fig.update_yaxes(title_text=f"<b>{sign} Values</b>", row=row, col=col)
+        fig.update_xaxes(title_text="<b>Time (min)</b>", matches='x', row=row, col=col)
+        i += 1
 
-    # Create a new figure with subplots for each vital sign
-    num_signals = len(vital_signs)
-    num_cols = int(np.ceil(np.sqrt(num_signals)))
-    num_rows = int(np.ceil(num_signals / num_cols))
+    if bp_included:
+        row, col = divmod(i, num_cols)
+        row += 1
+        col += 1
+        bp_order = ['sbp', 'mbp', 'dbp']
+        bp_colors = {'sbp': 'teal', 'mbp': 'slateblue', 'dbp': 'lightseagreen'}
 
-    fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols, figsize=(width, height))  # Adjust figure size
+        for bp in bp_order:
+            if bp in valid_signs:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_case['time'],
+                        y=df_case[bp],
+                        mode=mode,
+                        name=bp,
+                        line=dict(color=bp_colors[bp], width=1),
+                        marker=dict(size=3)
+                    ),
+                    row=row, col=col
+                )
+        fig.update_yaxes(title_text="<b>Blood Pressure (mmHg)</b>", row=row, col=col)
+        fig.update_xaxes(title_text="<b>Time (min)</b>", matches='x', row=row, col=col)
 
-    # Iterate over each sign
-    for i, sign in enumerate(vital_signs, start=1):
-        sign_data = vital_signs_id[['time', sign]].dropna(subset=[sign])
+    # Add vertical lines using general_info_df
+    if startendline and general_info_df is not None:
+        general_info_case = general_info_df[general_info_df['caseid'] == caseid]
+        if not general_info_case.empty:
+            opstart, opend = general_info_case.iloc[0][['opstart', 'opend']] / 60
+            anestart, aneend = general_info_case.iloc[0][['anestart', 'aneend']] / 60
 
+            if not np.isnan(anestart):
+                fig.add_vline(x=anestart, line_dash="dash", line_color="crimson", line_width=2)
+            if not np.isnan(aneend):
+                fig.add_vline(x=aneend, line_dash="dash", line_color="crimson", line_width=2)
+            if not np.isnan(opstart):
+                fig.add_vline(x=opstart, line_dash="dash", line_color="darkred", line_width=2)
+            if not np.isnan(opend):
+                fig.add_vline(x=opend, line_dash="dash", line_color="darkred", line_width=2)
 
-        row = (i - 1) // num_cols
-        col = (i - 1) % num_cols
-
-        ax = axes[row, col] if num_signals > 1 else axes
-
-        if sign not in ['MBP', 'SBP', 'DBP']:
-            # Plot the current signal
-            ax.plot(sign_data['time'], sign_data[sign], linestyle='-', color=colors[vital_signs.index(sign)], label=sign)
-            ax.set_title(f"{sign} ")
-            ax.set_xlabel("Time (minutes)")
-            ax.set_ylabel("Values", labelpad=5)
-
-        # Join all blood pressures in the same subplot
-        else:  # Only need to do this for MBP as it's the main BP plot
-            ax.plot(vital_signs_id.dropna(subset=['SBP'])['time'], vital_signs_id.dropna(subset=['SBP'])['SBP'],
-                    linestyle='-', color='teal', label='SBP')
-            ax.plot(vital_signs_id.dropna(subset=['MBP'])['time'], vital_signs_id.dropna(subset=['MBP'])['MBP'],
-                    linestyle='dashdot', color='slateblue', label='MBP')
-            ax.plot(vital_signs_id.dropna(subset=['DBP'])['time'], vital_signs_id.dropna(subset=['DBP'])['DBP'],
-                    linestyle='--', color='lightseagreen', label='DBP')
-
-            ax.set_title("Blood Pressure")
-            ax.set_xlabel("Time (minutes)")
-            ax.set_ylabel("Values", labelpad=5)
-
-        # Add lines with the start and finish surgery times (if applicable)
-        if startendline and general_info_df is not None:
-            general_info_id = general_info_df[general_info_df['caseid'] == id]
-            start_surgery = general_info_id['opstart'].values[0]/60
-            end_surgery = general_info_id['opend'].values[0]/60
-            start_anesthesia = general_info_id['anestart'].values[0]/60
-            end_anesthesia = general_info_id['aneend'].values[0]/60
-            ax.axvline(start_surgery, color='darkred', linestyle='--', label='Start/End Surgery' if i == len(vital_signs) else None)
-            ax.axvline(end_surgery, color='darkred', linestyle='--')
-            ax.axvline(start_anesthesia, color='crimson', linestyle='--', label='Start/End Anesthesia' if i == len(vital_signs) else None)
-            ax.axvline(end_anesthesia, color='crimson', linestyle='--')
-
-    # Hide any unused subplots
-    if num_signals < num_rows * num_cols:
-        for j in range(num_signals, num_rows * num_cols):
-            fig.delaxes(axes.flatten()[j])
-            
-    # Iterate over each axis and enable horizontal grid lines
-    for ax in axes.flat:
-        ax.grid(axis='y', linestyle='--', color='gray', linewidth=0.5, alpha=0.3)
-
-    # Add legend for the entire plot and adjust its position
+        # Add invisible traces to include dashed lines in the legend
+        if not (np.isnan(aneend) and np.isnan(anestart)):
+            fig.add_trace(
+                go.Scatter(
+                    x=[aneend, aneend],
+                    y=[0, 1],
+                    mode='lines',
+                    name="Anesthesia Start/End",
+                    line=dict(color="crimson", dash="dash", width=2),  # Use width > 0 for the legend
+                    showlegend=True
+                )
+            )
+        if not (np.isnan(opstart) and np.isnan(opend)):
+            fig.add_trace(
+                go.Scatter(
+                    x=[opstart, opstart],
+                    y=[0, 1],
+                    mode='lines',
+                    name="Surgery Start/End",
+                    line=dict(color="darkred", dash="dash", width=2),  # Use width > 0 for the legend
+                    showlegend=True
+                )
+            )
+    # Layout settings
+    legend_opts = dict(
+        bgcolor='#f7f7f5',
+        bordercolor='gray',
+        borderwidth=2,
+        font=dict(size=size_legend)
+    )
     if xlegend is not None and ylegend is not None:
-        fig.legend(bbox_to_anchor=(xlegend, ylegend), fontsize=size_legend)
-    else:
-        fig.legend(fontsize=size_legend, loc='best')
-
-    if title:
-        plt.suptitle(f"Vital Signs Time Series for Patient {id}", fontsize=12)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.99])
-
-    return plt.gca().figure
-
-def plot_correlation_heatmap(vital_signs_df_vs_cleaned, tickssize=16, width=800, height=700):
-    """
-        Plots a heatmap of the correlation matrix of the Z-score normalized data using Plotly.
-        
-        Arguments:
-            vital_signs_df_vs_cleaned (pd.DataFrame): The DataFrame containing the vital signs data.
-            tickssize (int): Font size for the tick labels.
-            width (int): Width of the plot.
-            height (int) Height of the plot. 
-
-        Returns:
-            fig : plotly.graph_objects.Figure. The Plotly figure object containing the heatmap.
-    """
-
-    # Group the dataframe by 'caseid'
-    grouped_vital_signs_df = vital_signs_df_vs_cleaned.groupby('caseid')
-
-    # Define a function to Z-score normalize the data for each column within each group
-    def zscore_normalize(group):
-        return group.apply(lambda x: (x - x.mean()) / x.std() if x.name not in ['caseid', 'time'] else x)
-
-    # Apply Z-score normalization
-    zscore_normalized_df = grouped_vital_signs_df.apply(zscore_normalize).reset_index(drop=True)
-
-    # Compute the correlation matrix
-    correlation_matrix = zscore_normalized_df.drop(columns=['caseid', 'time']).corr()
-
-    # Mask upper triangle
-    mask = np.triu(np.ones(correlation_matrix.shape), k=1).astype(bool)
-    correlation_matrix_masked = correlation_matrix.mask(mask)
-    np.fill_diagonal(correlation_matrix_masked.values, 1)
-
-    # Create Plotly heatmap
-    fig = go.Figure(data=go.Heatmap(
-        z=correlation_matrix_masked.values,
-        x=correlation_matrix_masked.columns,
-        y=correlation_matrix_masked.index,
-        zmid=0,
-        colorscale='RdBu_r',
-        colorbar=dict(title='Correlation')
-    ))
+        legend_opts.update(x=xlegend, y=ylegend)
 
     fig.update_layout(
-        title='Correlation Heatmap (Z-score normalized)',
-        width=width,
-        height=height,
-        xaxis=dict(tickfont=dict(size=tickssize)),
-        yaxis=dict(tickfont=dict(size=tickssize)),
-        plot_bgcolor='white',
-        margin=dict(l=40, r=40, t=40, b=40)
+        height=height, width=width,
+        title_text=f"<b>Vital Signs Time Series for Patient {caseid}</b>",
+        title=dict(x=0.5, xanchor='center', yanchor='top'),
+        plot_bgcolor='#f7f7f5',
+        legend=legend_opts
     )
+    fig.update_traces(connectgaps=connectgaps)
 
-    fig.show()
+    return fig
+
+def plot_multiple_timeseries_mplb(vital_signs_df, caseid, vital_signs, 
+                             general_info_df=None, startendline=False,
+                             width=12, height=8, xlegend=1.25, ylegend=0.8,
+                             size_legend=10, title=True,color_map=None):
+    """
+        Function to plot multiple time series for a given patient ID using matplotlib. 
+        Does the same as plot_multiple_timeseries_plotly but uses matplotlib for plotting.
+
+        Arguments:
+        - vital_signs_df: DataFrame containing the vital signs data.
+        - caseid: Patient ID to filter the data.
+        - vital_signs: List of vital signs to plot.
+        - general_info_df: DataFrame containing general information about the patient.
+        - startendline: Boolean to indicate if vertical lines for surgery/anesthesia should be plotted.
+        - width: Width of the plot.
+        - height: Height of the plot.
+        - xlegend: X position of the legend.
+        - ylegend: Y position of the legend.
+        - size_legend: Font size of the legend.
+        - title: Boolean to indicate if a title should be added to the plot.
+        
+        Returns:
+        - fig: Matplotlib figure object containing the plot.
+    """
+
+    # Filter by patient and convert time to minutes
+    df = vital_signs_df[vital_signs_df['caseid'] == caseid].copy()
+    df['time'] = df['time'] / 60
+
+    # Remove signals with no useful data
+    vital_signs_cleaned = []
+    for signal in vital_signs:
+        data = df[signal]
+        if not (data.isna().all() or data.dropna().eq(0).all()):
+            vital_signs_cleaned.append(signal)
+        else:
+            print(f"No data for {signal}")
+
+    # Define subplot layout
+    num_signals = len(vital_signs_cleaned)
+    num_cols = int(np.ceil(np.sqrt(num_signals)))
+    num_rows = int(np.ceil(num_signals / num_cols))
+    fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols, figsize=(width, height))
+    axes = np.array(axes).reshape(-1)  # Ensure 1D array for easy indexing
+
+    # Color mapping
+    if color_map is None:
+        color_map = {
+            'sbp': 'teal', 'mbp': 'slateblue', 'dbp': 'lightseagreen',
+            'hr': 'navy', 'spo2': 'darkorange', 'bis': 'purple',
+            'insp_sevo': 'seagreen', 'exp_sevo': 'yellowgreen'
+        }
+        
+
+    # Plot blood pressure signals together if present
+    bp_signals = {'sbp', 'mbp', 'dbp'}
+    bp_included = any(sign in bp_signals for sign in vital_signs_cleaned)
+
+    plot_idx = 0
+    for signal in vital_signs_cleaned:
+        if signal in bp_signals and bp_included:
+            if signal == 'mbp':
+                ax = axes[plot_idx]
+                for bp in ['sbp', 'mbp', 'dbp']:
+                    if bp in df.columns:
+                        valid_bp = df[['time', bp]].dropna()
+                        if not valid_bp.empty:
+                            ax.plot(valid_bp['time'], valid_bp[bp], label=bp,
+                                    linestyle='--' if bp == 'dbp' else '-', 
+                                    color=color_map[bp])
+                ax.set_title("Blood Pressure")
+                bp_included = False
+                plot_idx += 1
+            else:
+                continue
+        else:
+            valid_data = df[['time', signal]].dropna()
+            if valid_data.empty:
+                print(f"{signal} has only NaNs, skipping.")
+                continue
+            ax = axes[plot_idx]
+            ax.plot(valid_data['time'], valid_data[signal], label=signal, color=color_map[signal])
+            ax.set_title(signal)
+            plot_idx += 1
+
+        ax.set_xlabel("Time (minutes)")
+        ax.set_ylabel("Values")
+        ax.grid(axis='y', linestyle='--', color='gray', linewidth=0.5, alpha=0.3)
+
+        # Optional surgery/anesthesia vertical lines
+        if startendline and general_info_df is not None:
+            gen_info = general_info_df[general_info_df['caseid'] == caseid]
+            if not gen_info.empty:
+                opstart, opend = gen_info.iloc[0][['opstart', 'opend']] / 60
+                anestart, aneend = gen_info.iloc[0][['anestart', 'aneend']] / 60
+                ax.axvline(opstart, color='darkred', linestyle='--', 
+                           label='Start/End Surgery' if plot_idx == 1 else None)
+                ax.axvline(opend, color='darkred', linestyle='--')
+                ax.axvline(anestart, color='crimson', linestyle='--',
+                            label='Start/End Anesthesia' if plot_idx == 1 else None)
+                ax.axvline(aneend, color='crimson', linestyle='--')
+
+    # Remove unused subplots
+    for j in range(plot_idx, len(axes)):
+        fig.delaxes(axes[j])
+
+    # Add legend and title
+    fig.legend(bbox_to_anchor=(xlegend, ylegend), fontsize=size_legend)
+    if title:
+        fig.suptitle(f"Vital Signs Time Series for Patient {caseid}", fontsize=12)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.99])
+    return fig
+
+
