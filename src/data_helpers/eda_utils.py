@@ -199,6 +199,15 @@ def descriptive_histogram(clinical_info_df,column,fig_title, xaxis_label = None,
         nxticks (int, optional): Number of ticks on the x-axis. Defaults to 10.
         kde (bool, optional): Whether to show kernel density estimate. Defaults to False.
     """
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=".*use_inf_as_na option is deprecated.*",
+            category=FutureWarning,
+            module='seaborn'
+            )
+
 
     #Get number of nulls and percentage of nulls in each column
     nulls = clinical_info_df[column].isnull().sum()
